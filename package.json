@@ -1,0 +1,22 @@
+{
+  "name": "fxos-websocket-server",
+  "version": "0.0.1",
+  "homepage": "https://github.com/p2p-web/fxos-websocket-server",
+  "license": "MIT",
+  "main": "dist/fxos-websocket-server.js",
+  "dependencies": {},
+  "devDependencies": {
+    "browserify": "^7.0.0"
+  },
+  "scripts": {
+    "build": "mkdir -p dist && ./node_modules/.bin/browserify src/server.js --outfile dist/fxos-websocket-server.js --standalone WebSocketServer",
+    "clean": "rm -rf dist/fxos-web-server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/p2p-web/fxos-websocket-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/p2p-web/fxos-websocket-server/issues"
+  }
+}

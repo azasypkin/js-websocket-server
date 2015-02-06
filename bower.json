@@ -1,0 +1,21 @@
+{
+  "name": "fxos-websocket-server",
+  "version": "0.0.1",
+  "homepage": "https://github.com/p2p-web/fxos-websocket-server",
+  "authors": [
+    "Aleh Zasypkin <aleh.zasypkin@gmail.com>"
+  ],
+  "main": "dist/fxos-websocket-server.js",
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "src",
+    "bower.json",
+    "LICENSE",
+    "package.json",
+    "README.md"
+  ],
+  "dependencies": {},
+  "devDependencies": {}
+}
