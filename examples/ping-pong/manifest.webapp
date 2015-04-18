@@ -1,0 +1,23 @@
+{
+  "name": "WebSocket Ping-Pong",
+  "description": "WebSocket Ping-Pong",
+  "type": "privileged",
+  "launch_path": "/index.html",
+  "orientation": "default",
+  "permissions": {
+    "tcp-socket": {}
+  },
+  "locales": {
+    "en-US": {
+      "name": "WebSocket Ping-Pong",
+      "description": "WebSocket Ping-Pong"
+    }
+  },
+  "default_locale": "en-US",
+  "icons": {
+    "16": "/img/icons/icon16x16.png",
+    "48": "/img/icons/icon48x48.png",
+    "60": "/img/icons/icon60x60.png",
+    "128": "/img/icons/icon128x128.png"
+  }
+}

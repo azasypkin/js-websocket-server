@@ -6,7 +6,10 @@
   "main": "dist/fxos-websocket-server.js",
   "dependencies": {},
   "devDependencies": {
-    "browserify": "^7.0.0"
+    "gulp": "^3.8.x",
+    "gulp-babel": "^5.1.x",
+    "browserify": "^9.0.x",
+    "babelify": "^6.0.x"
   },
   "scripts": {
     "build": "mkdir -p dist && ./node_modules/.bin/browserify src/server.js --outfile dist/fxos-websocket-server.js --standalone WebSocketServer",
