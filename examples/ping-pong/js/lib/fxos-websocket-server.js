@@ -220,7 +220,7 @@ var WebSocketServer = (function () {
       if (socket) {
         socket.close();
         this[privates.socket] = null;
-        this[privates].onSocketClose();
+        this[privates.onSocketClose]();
       }
 
       if (tcpSocket) {
