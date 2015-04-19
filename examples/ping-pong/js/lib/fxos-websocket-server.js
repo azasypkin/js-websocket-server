@@ -11,7 +11,7 @@ Object.defineProperty(exports, '__esModule', {
   value: true
 });
 
-var _EventDispatcher = require('../components/alzas-event-dispatcher/event-dispatcher.es6');
+var _EventDispatcher = require('../components/event-dispatcher-js/event-dispatcher.es6');
 
 var _EventDispatcher2 = _interopRequireWildcard(_EventDispatcher);
 
@@ -380,7 +380,7 @@ exports['default'] = {
 };
 module.exports = exports['default'];
 
-},{"../components/alzas-event-dispatcher/event-dispatcher.es6":2,"./frame-buffer.es6":3,"./utils.es6":4}],2:[function(require,module,exports){
+},{"../components/event-dispatcher-js/event-dispatcher.es6":2,"./frame-buffer.es6":3,"./utils.es6":4}],2:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, '__esModule', {
@@ -548,7 +548,7 @@ Object.defineProperty(exports, '__esModule', {
   value: true
 });
 
-var _EventDispatcher = require('../components/alzas-event-dispatcher/event-dispatcher.es6');
+var _EventDispatcher = require('../components/event-dispatcher-js/event-dispatcher.es6');
 
 var _EventDispatcher2 = _interopRequireWildcard(_EventDispatcher);
 
@@ -637,7 +637,7 @@ var WebSocketFrameBuffer = (function () {
 exports['default'] = WebSocketFrameBuffer;
 module.exports = exports['default'];
 
-},{"../components/alzas-event-dispatcher/event-dispatcher.es6":2}],4:[function(require,module,exports){
+},{"../components/event-dispatcher-js/event-dispatcher.es6":2}],4:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, '__esModule', {

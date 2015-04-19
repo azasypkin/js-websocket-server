@@ -1,5 +1,5 @@
 import EventDispatcher from
-  '../components/alzas-event-dispatcher/event-dispatcher.es6';
+  '../components/event-dispatcher-js/event-dispatcher.es6';
 import WebSocketFrameBuffer from './frame-buffer.es6';
 import WebSocketUtils from './utils.es6';
 

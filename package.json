@@ -11,10 +11,6 @@
     "browserify": "^9.0.x",
     "babelify": "^6.0.x"
   },
-  "scripts": {
-    "build": "mkdir -p dist && ./node_modules/.bin/browserify src/server.js --outfile dist/fxos-websocket-server.js --standalone WebSocketServer",
-    "clean": "rm -rf dist/fxos-web-server.js"
-  },
   "repository": {
     "type": "git",
     "url": "git://github.com/p2p-web/fxos-websocket-server.git"

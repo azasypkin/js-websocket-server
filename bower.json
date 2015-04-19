@@ -16,6 +16,6 @@
     "README.md"
   ],
   "dependencies": {
-    "alzas-event-dispatcher": "master"
+    "event-dispatcher-js": "master"
   }
 }
