@@ -54,11 +54,11 @@ function getHttpHeaders(httpHeaderString) {
 
 /**
  * Performs WebSocket HTTP Handshake.
- * @param {TCPSocket} socket Connection socket.
+ * @param {TCPSocket} tcpSocket Connection socket.
  * @param {Uint8Array} httpRequestData HTTP Handshake data array.
  * @returns {Map.<string, string>} Parsed http headers
  */
-function performHandshake(socket, httpRequestData) {
+function performHandshake(tcpSocket, httpRequestData) {
   var httpHeaders = getHttpHeaders(
     WebSocketUtils.arrayToString(httpRequestData).split(CRLF + CRLF)[0]
   );
@@ -76,7 +76,7 @@ function performHandshake(socket, httpRequestData) {
       WEBSOCKET_HANDSHAKE_RESPONSE.replace('{web-socket-key}', webSocketKey)
     );
 
-    socket.send(arrayResponse.buffer, 0, arrayResponse.byteLength);
+    tcpSocket.send(arrayResponse.buffer, 0, arrayResponse.byteLength);
 
     return httpHeaders;
   });
@@ -139,15 +139,18 @@ function createMessageFrame(opCode, data, isComplete, isMasked) {
 }
 
 var privates = {
-  tcpSocket: Symbol('tcp-socket'),
-  socket: Symbol('socket'),
+  tcpServerSocket: Symbol('tcp-socket'),
+  onTCPServerSocketConnect: Symbol('onTCPServerSocketConnect'),
+  onTCPServerSocketClose: Symbol('onTCPServerSocketClose'),
+
+  tcpSocket: Symbol('tcpSocket'),
+  onTCPSocketData: Symbol('onTCPSocketData'),
+  onTCPSocketClose: Symbol('onTCPSocketClose'),
+
   clients: Symbol('clients'),
   frameBuffer: Symbol('frameBuffer'),
 
-  onSocketConnect: Symbol('onSocketConnect'),
-  onSocketData: Symbol('onSocketData'),
-  onMessageFrame: Symbol('onMessageFrame'),
-  onSocketClose: Symbol('onSocketClose')
+  onMessageFrame: Symbol('onMessageFrame')
 };
 
 /**
@@ -156,19 +159,21 @@ var privates = {
  */
 class WebSocketServer {
   constructor(port) {
-    EventDispatcher.mixin(this, ['message']);
+    EventDispatcher.mixin(this, ['message', 'stop']);
 
-    var tcpSocket = navigator.mozTCPSocket.listen(port, {
+    var tcpServerSocket = navigator.mozTCPSocket.listen(port, {
       binaryType: 'arraybuffer'
     });
 
-    this[privates.tcpSocket] = tcpSocket;
+    this[privates.tcpServerSocket] = tcpServerSocket;
     this[privates.clients] = new Map();
     this[privates.frameBuffer] = new WebSocketFrameBuffer();
 
     this[privates.onMessageFrame] = this[privates.onMessageFrame].bind(this);
 
-    tcpSocket.onconnect = this[privates.onSocketConnect].bind(this);
+    tcpServerSocket.onconnect =
+      this[privates.onTCPServerSocketConnect].bind(this);
+    tcpServerSocket.onerror = this[privates.onTCPServerSocketClose].bind(this);
   }
 
   /**
@@ -188,56 +193,54 @@ class WebSocketServer {
 
     var dataFrame = createMessageFrame(0x2, data, true, false);
 
-    this[privates.socket].send(dataFrame.buffer, 0, dataFrame.length);
+    this[privates.tcpSocket].send(dataFrame.buffer, 0, dataFrame.length);
   }
 
   /**
    * Destroys socket connection.
    */
   stop() {
-    var socket = this[privates.socket];
     var tcpSocket = this[privates.tcpSocket];
-
-    // close connection
-    if (socket) {
-      socket.close();
-      this[privates.socket] = null;
-      this[privates.onSocketClose]();
-    }
-
     if (tcpSocket) {
       tcpSocket.close();
-      tcpSocket.onconnect = this[privates.tcpSocket] = null;
+      this[privates.onTCPSocketClose]();
+    }
+
+    var tcpServerSocket = this[privates.tcpServerSocket];
+    if (tcpServerSocket) {
+      tcpServerSocket.close();
+      this[privates.onTCPServerSocketClose]();
     }
 
     this[privates.clients].clear();
   }
 
-  [privates.onSocketConnect](socket) {
-    this[privates.socket] = socket;
+  [privates.onTCPServerSocketConnect](tcpSocket) {
+    this[privates.tcpSocket] = tcpSocket;
 
     this[privates.frameBuffer].on('frame', this[privates.onMessageFrame]);
 
-    socket.ondata = this[privates.onSocketData].bind(this);
-    socket.onclose = socket.onerror = this[privates.onSocketClose].bind(this);
+    tcpSocket.ondata = this[privates.onTCPSocketData].bind(this);
+    tcpSocket.onclose = tcpSocket.onerror =
+      this[privates.onTCPSocketClose].bind(this);
   }
 
   /**
    * MozTcpSocket data handler.
    * @param {TCPSocketEvent} socketEvent TCPSocket data event.
    */
-  [privates.onSocketData](socketEvent) {
+  [privates.onTCPSocketData](socketEvent) {
     var clients = this[privates.clients];
-    var socket = this[privates.socket];
+    var tcpSocket = this[privates.tcpSocket];
 
     var frameData = new Uint8Array(socketEvent.data);
 
     // If we don't have connection info from this host let's perform handshake
     // Currently we support only ONE client from host.
-    if (!clients.has(socket.host)) {
-      performHandshake(socket, frameData).then((handshakeResult) => {
+    if (!clients.has(tcpSocket.host)) {
+      performHandshake(tcpSocket, frameData).then((handshakeResult) => {
         if (handshakeResult) {
-          clients.set(socket.host, handshakeResult);
+          clients.set(tcpSocket.host, handshakeResult);
         }
       });
       return;
@@ -323,8 +326,8 @@ class WebSocketServer {
         console.log('Socket is closed: ' + code + ' ' + reason);
 
         var dataFrame = createMessageFrame(0x8, state.data, true);
-        this[privates.socket].send(dataFrame.buffer, 0, dataFrame.length);
-        this[privates.onSocketClose]();
+        this[privates.tcpSocket].send(dataFrame.buffer, 0, dataFrame.length);
+        this[privates.onTCPSocketClose]();
       } else if (state.opCode === OperationCode.TEXT_FRAME ||
                  state.opCode === OperationCode.BINARY_FRAME) {
         this.emit('message', state.data);
@@ -336,12 +339,32 @@ class WebSocketServer {
     });
   }
 
-  [privates.onSocketClose]() {
-    var socket = this[privates.socket];
+  [privates.onTCPSocketClose]() {
+    var tcpSocket = this[privates.tcpSocket];
 
-    this[privates.clients].delete(socket.host);
+    if (!tcpSocket) {
+      return;
+    }
 
-    socket.ondata = socket.onerror = socket.onclose = null;
+    this[privates.clients].delete(tcpSocket.host);
+
+    tcpSocket.ondata = tcpSocket.onerror = tcpSocket.onclose = null;
+
+    this[privates.tcpSocket] = null;
+  }
+
+  [privates.onTCPServerSocketClose]() {
+    var tcpServerSocket = this[privates.tcpServerSocket];
+
+    if (!tcpServerSocket) {
+      return;
+    }
+
+    tcpServerSocket.onconnect = tcpServerSocket.onerror = null;
+
+    this[privates.tcpServerSocket] = null;
+
+    this.emit('stop');
   }
 }
 
