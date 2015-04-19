@@ -10,14 +10,12 @@
   "ignore": [
     "**/.*",
     "node_modules",
-    "src",
     "bower.json",
     "LICENSE",
     "package.json",
     "README.md"
   ],
-  "dependencies": {},
-  "devDependencies": {
+  "dependencies": {
     "alzas-event-dispatcher": "master"
   }
 }
