@@ -17,5 +17,8 @@
   },
   "bugs": {
     "url": "https://github.com/p2p-web/fxos-websocket-server/issues"
+  },
+  "browser": {
+    "event-dispatcher-js": "./components/event-dispatcher-js/event-dispatcher.es6.js"
   }
 }
