@@ -17,7 +17,7 @@ gulp.task('compile', function() {
     .transform(babelify)
     .require('./src/server.es6.js', { entry: true })
     // Exclude external event dispatcher lib non-standalone file
-    .ignore('event-dispatcher-js')
+    .ignore('EventDispatcher')
     .bundle()
     .on('error', onError)
     .pipe(fs.createWriteStream('dist/fxos-websocket-server.js'));

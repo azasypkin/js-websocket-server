@@ -1,4 +1,4 @@
-import EventDispatcher from 'event-dispatcher-js';
+import EventDispatcher from 'EventDispatcher';
 import WebSocketFrameBuffer from './frame-buffer.es6';
 import WebSocketUtils from './utils.es6';
 

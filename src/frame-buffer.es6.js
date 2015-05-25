@@ -1,4 +1,4 @@
-import EventDispatcher from 'event-dispatcher-js';
+import EventDispatcher from 'EventDispatcher';
 
 var privates = {
   data: Symbol('data'),
