@@ -86,7 +86,7 @@ function performHandshake(tcpSocket, httpRequestData) {
  * @param {Number} opCode Frame operation code.
  * @param {Uint8Array} data Data array.
  * @param {Boolean} isComplete Indicates if frame is completed.
- * @param {Boolean} isMasked Indicates if frame data should be masked.
+ * @param {Boolean?} isMasked Indicates if frame data should be masked.
  * @returns {Uint8Array} Constructed frame data.
  */
 function createMessageFrame(opCode, data, isComplete, isMasked) {
@@ -190,7 +190,12 @@ class WebSocketServer {
       }
     }
 
-    var dataFrame = createMessageFrame(0x2, data, true, false);
+    var dataFrame = createMessageFrame(
+      OperationCode.BINARY_FRAME,
+      data,
+      true /* isCompleted */,
+      false /* isMasked */
+    );
 
     this[privates.tcpSocket].send(dataFrame.buffer, 0, dataFrame.length);
   }
@@ -270,10 +275,6 @@ class WebSocketServer {
         throw new Error('Continuation frame is not yet supported!');
       }
 
-      if (state.opCode === OperationCode.PING) {
-        throw new Error('Ping frame is not yet supported!');
-      }
-
       if (state.opCode === OperationCode.PONG) {
         throw new Error('Pong frame is not yet supported!');
       }
@@ -311,6 +312,7 @@ class WebSocketServer {
         return state;
       }) : state;
     }).then((state) => {
+      var dataFrame;
       if (state.opCode === OperationCode.CONNECTION_CLOSE) {
         var code = 0;
         var reason = 'Unknown';
@@ -322,14 +324,37 @@ class WebSocketServer {
           }
         }
 
-        console.log('Socket is closed: ' + code + ' ' + reason);
+        console.log('Socket is closed: %s (code is %s)', reason, code);
 
-        var dataFrame = createMessageFrame(0x8, state.data, true);
+        dataFrame = createMessageFrame(
+          OperationCode.CONNECTION_CLOSE, state.data, true /* isCompleted */
+        );
         this[privates.tcpSocket].send(dataFrame.buffer, 0, dataFrame.length);
         this[privates.onTCPSocketClose]();
       } else if (state.opCode === OperationCode.TEXT_FRAME ||
                  state.opCode === OperationCode.BINARY_FRAME) {
         this.emit('message', state.data);
+      } else if (state.opCode === OperationCode.PING) {
+        console.log(
+          'PING frame is received (masked: %s, hasData: %s)',
+          state.isMasked,
+          !!state.data
+        );
+
+        if (!state.isCompleted) {
+          throw new Error('Fragmented Ping frame is not supported!');
+        }
+
+        if (state.dataLength > 125) {
+          throw new Error(
+            'Ping frame can not have more than 125 bytes of data!'
+          );
+        }
+
+        dataFrame = createMessageFrame(
+          OperationCode.PONG, state.data, true /* isCompleted */, state.isMasked
+        );
+        this[privates.tcpSocket].send(dataFrame.buffer, 0, dataFrame.length);
       }
 
       if (!buffer.isEmpty()) {

@@ -35,7 +35,7 @@ gulp.task('compile-standalone', function() {
 gulp.task('default', ['compile', 'compile-standalone'], function () {
   // Copy standalone variant to examples folder
   gulp.src('./dist/fxos-websocket-server-standalone.js').pipe(
-      gulp.dest('./examples/ping-pong/js/lib/')
+    gulp.dest('./examples/ping-pong/js/lib/')
   );
 });
 
