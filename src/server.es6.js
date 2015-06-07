@@ -53,11 +53,11 @@ function getHttpHeaders(httpHeaderString) {
 
 /**
  * Performs WebSocket HTTP Handshake.
- * @param {TCPSocket} tcpSocket Connection socket.
  * @param {Uint8Array} httpRequestData HTTP Handshake data array.
- * @returns {Map.<string, string>} Parsed http headers
+ * @returns {Promise.<{ response: Uint8Array, headers: Map<string, string>}>}
+ * Contains handshake headers received from client and response to send.
  */
-function performHandshake(tcpSocket, httpRequestData) {
+function performHandshake(httpRequestData) {
   var httpHeaders = getHttpHeaders(
     WebSocketUtils.arrayToString(httpRequestData).split(CRLF + CRLF)[0]
   );
@@ -71,13 +71,15 @@ function performHandshake(tcpSocket, httpRequestData) {
     var webSocketKey = btoa(WebSocketUtils.arrayToString(
       new Uint8Array(hashArrayBuffer)
     ));
+
     var arrayResponse = WebSocketUtils.stringToArray(
       WEBSOCKET_HANDSHAKE_RESPONSE.replace('{web-socket-key}', webSocketKey)
     );
 
-    tcpSocket.send(arrayResponse.buffer, 0, arrayResponse.byteLength);
-
-    return httpHeaders;
+    return {
+      response: arrayResponse,
+      headers: httpHeaders
+    };
   });
 }
 
@@ -142,12 +144,10 @@ var privates = {
   onTCPServerSocketConnect: Symbol('onTCPServerSocketConnect'),
   onTCPServerSocketClose: Symbol('onTCPServerSocketClose'),
 
-  tcpSocket: Symbol('tcpSocket'),
   onTCPSocketData: Symbol('onTCPSocketData'),
   onTCPSocketClose: Symbol('onTCPSocketClose'),
 
   clients: Symbol('clients'),
-  frameBuffer: Symbol('frameBuffer'),
 
   onMessageFrame: Symbol('onMessageFrame')
 };
@@ -160,19 +160,16 @@ class WebSocketServer {
   constructor(port) {
     EventDispatcher.mixin(this, ['message', 'stop']);
 
-    var tcpServerSocket = navigator.mozTCPSocket.listen(port, {
-      binaryType: 'arraybuffer'
-    });
+    var tcpServerSocket = this[privates.tcpServerSocket] =
+      navigator.mozTCPSocket.listen(port, { binaryType: 'arraybuffer' });
 
-    this[privates.tcpServerSocket] = tcpServerSocket;
-    this[privates.clients] = new Map();
-    this[privates.frameBuffer] = new WebSocketFrameBuffer();
+    tcpServerSocket.onconnect = this[privates.onTCPServerSocketConnect].bind(
+      this
+    );
 
-    this[privates.onMessageFrame] = this[privates.onMessageFrame].bind(this);
-
-    tcpServerSocket.onconnect =
-      this[privates.onTCPServerSocketConnect].bind(this);
     tcpServerSocket.onerror = this[privates.onTCPServerSocketClose].bind(this);
+
+    this[privates.clients] = new Map();
   }
 
   /**
@@ -197,36 +194,30 @@ class WebSocketServer {
       false /* isMasked */
     );
 
-    this[privates.tcpSocket].send(dataFrame.buffer, 0, dataFrame.length);
+    this[privates.clients].forEach((client) => {
+      client.socket.send(dataFrame.buffer, 0, dataFrame.length);
+    });
   }
 
   /**
    * Destroys socket connection.
    */
   stop() {
-    var tcpSocket = this[privates.tcpSocket];
-    if (tcpSocket) {
-      tcpSocket.close();
-      this[privates.onTCPSocketClose]();
-    }
+    this[privates.clients].forEach((client) => {
+      this[privates.onTCPSocketClose](client.socket);
+    });
 
     var tcpServerSocket = this[privates.tcpServerSocket];
     if (tcpServerSocket) {
       tcpServerSocket.close();
       this[privates.onTCPServerSocketClose]();
     }
-
-    this[privates.clients].clear();
   }
 
   [privates.onTCPServerSocketConnect](tcpSocket) {
-    this[privates.tcpSocket] = tcpSocket;
-
-    this[privates.frameBuffer].on('frame', this[privates.onMessageFrame]);
-
     tcpSocket.ondata = this[privates.onTCPSocketData].bind(this);
     tcpSocket.onclose = tcpSocket.onerror =
-      this[privates.onTCPSocketClose].bind(this);
+      this[privates.onTCPSocketClose].bind(this, tcpSocket);
   }
 
   /**
@@ -234,33 +225,52 @@ class WebSocketServer {
    * @param {TCPSocketEvent} socketEvent TCPSocket data event.
    */
   [privates.onTCPSocketData](socketEvent) {
-    var clients = this[privates.clients];
-    var tcpSocket = this[privates.tcpSocket];
+    var socket = socketEvent.target;
+    var clientId = socket.host + ':' + socket.port;
+    var client = this[privates.clients].get(clientId);
 
     var frameData = new Uint8Array(socketEvent.data);
 
-    // If we don't have connection info from this host let's perform handshake
-    // Currently we support only ONE client from host.
-    if (!clients.has(tcpSocket.host)) {
-      performHandshake(tcpSocket, frameData).then((handshakeResult) => {
-        if (handshakeResult) {
-          clients.set(tcpSocket.host, handshakeResult);
+    // If we don't have connection info from this host let's perform handshake.
+    if (!client) {
+      performHandshake(frameData).then((handshake) => {
+        if (!handshake) {
+          throw new Error(
+            'Handshake with host %s:%s failed', socket.host, socket.port
+          );
         }
+
+        socket.send(
+          handshake.response.buffer, 0, handshake.response.byteLength
+        );
+
+        var client = {
+          socket: socket,
+          headers: handshake.headers,
+          buffer: new WebSocketFrameBuffer()
+        };
+
+        client.buffer.on(
+          'frame', this[privates.onMessageFrame].bind(this, client)
+        );
+
+        this[privates.clients].set(clientId, client);
+      }).catch(() => {
+        this[privates.onTCPSocketClose](socket);
       });
       return;
     }
 
-    this[privates.frameBuffer].put(frameData);
+    client.buffer.put(frameData);
   }
 
   /**
    * Process WebSocket incoming frame.
-   * @param {Uint8Array} frame Message frame data in view of Uint8Array.
+   * @param {{socket: TCPSocket, buffer: WebSocketFrameBuffer}} client Client
+   * descriptor object.
    */
-  [privates.onMessageFrame](frame) {
-    var buffer = this[privates.frameBuffer];
-
-    buffer.get(2).then((controlData) => {
+  [privates.onMessageFrame](client) {
+    client.buffer.get(2).then((controlData) => {
       var state = {
         isCompleted: (controlData[0] & 0x80) === 0x80,
         isMasked: (controlData[1] & 0x80) === 0x80,
@@ -295,11 +305,11 @@ class WebSocketServer {
     }).then((state) => {
       var dataLengthPromise;
       if (state.dataLength === 126) {
-        dataLengthPromise = buffer.get(2).then(
+        dataLengthPromise = client.buffer.get(2).then(
           (data) => WebSocketUtils.readUInt16(data)
         );
       } else if (state.dataLength == 127) {
-        dataLengthPromise = buffer.get(4).then(
+        dataLengthPromise = client.buffer.get(4).then(
           (data) => WebSocketUtils.readUInt32(data)
         );
       } else {
@@ -312,17 +322,20 @@ class WebSocketServer {
       });
     }).then((state) => {
       if (state.isMasked) {
-        return buffer.get(4).then((mask) => {
+        return client.buffer.get(4).then((mask) => {
           state.mask = mask;
           return state;
         });
       }
       return state;
     }).then((state) => {
-      return state.dataLength ? buffer.get(state.dataLength).then((data) => {
-        state.data = WebSocketUtils.mask(state.mask, data);
-        return state;
-      }) : state;
+      if (state.dataLength) {
+        return client.buffer.get(state.dataLength).then((data) => {
+          state.data = WebSocketUtils.mask(state.mask, data);
+          return state;
+        });
+      }
+      return state;
     }).then((state) => {
       var dataFrame;
       if (state.opCode === OperationCode.CONNECTION_CLOSE) {
@@ -341,8 +354,8 @@ class WebSocketServer {
         dataFrame = createMessageFrame(
           OperationCode.CONNECTION_CLOSE, state.data, true /* isCompleted */
         );
-        this[privates.tcpSocket].send(dataFrame.buffer, 0, dataFrame.length);
-        this[privates.onTCPSocketClose]();
+        client.socket.send(dataFrame.buffer, 0, dataFrame.length);
+        this[privates.onTCPSocketClose](client.socket);
       } else if (state.opCode === OperationCode.TEXT_FRAME ||
                  state.opCode === OperationCode.BINARY_FRAME) {
         this.emit('message', state.data);
@@ -366,11 +379,11 @@ class WebSocketServer {
         dataFrame = createMessageFrame(
           OperationCode.PONG, state.data, true /* isCompleted */, state.isMasked
         );
-        this[privates.tcpSocket].send(dataFrame.buffer, 0, dataFrame.length);
+        client.socket.send(dataFrame.buffer, 0, dataFrame.length);
       }
 
-      if (!buffer.isEmpty()) {
-        this[privates.onMessageFrame]();
+      if (!client.buffer.isEmpty()) {
+        this[privates.onMessageFrame](client);
       }
     }).catch((e) => {
       var code = 1002;
@@ -386,23 +399,26 @@ class WebSocketServer {
       var dataFrame = createMessageFrame(
         OperationCode.CONNECTION_CLOSE, data, true /* isCompleted */
       );
-      this[privates.tcpSocket].send(dataFrame.buffer, 0, dataFrame.length);
-      this[privates.onTCPSocketClose]();
+      client.socket.send(dataFrame.buffer, 0, dataFrame.length);
+      this[privates.onTCPSocketClose](client.socket);
     });
   }
 
-  [privates.onTCPSocketClose]() {
-    var tcpSocket = this[privates.tcpSocket];
-
-    if (!tcpSocket) {
+  [privates.onTCPSocketClose](socket) {
+    if (!socket) {
       return;
     }
 
-    this[privates.clients].delete(tcpSocket.host);
+    try {
+      socket.close();
+      socket.ondata = socket.onerror = socket.onclose = null;
+    } catch(e) {
+      console.log(
+        'Error occurred while closing socket %s', e.message || e.name
+      );
+    }
 
-    tcpSocket.ondata = tcpSocket.onerror = tcpSocket.onclose = null;
-
-    this[privates.tcpSocket] = null;
+    this[privates.clients].delete(socket.host + ':' + socket.port);
   }
 
   [privates.onTCPServerSocketClose]() {

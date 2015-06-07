@@ -1,9 +1,9 @@
 var WebSocketUtils = {
   /**
    * Mask every data element with the mask (WebSocket specific algorithm).
-   * @param {Array} mask Mask array.
-   * @param {Array} array Data array to mask.
-   * @returns {Array} Masked data array.
+   * @param {Uint8Array} mask Mask array.
+   * @param {Uint8Array} array Data array to mask.
+   * @returns {Uint8Array} Masked data array.
    */
   mask(mask, array) {
     if (mask) {
@@ -56,7 +56,7 @@ var WebSocketUtils = {
   /**
    * Reads unsigned 16 bit value from two consequent 8-bit array elements.
    * @param {Uint8Array} array Array to read from.
-   * @param {Number} offset Index to start read value.
+   * @param {Number?} offset Index to start read value.
    * @returns {Number}
    */
   readUInt16(array, offset) {
@@ -67,7 +67,7 @@ var WebSocketUtils = {
   /**
    * Reads unsigned 32 bit value from four consequent 8-bit array elements.
    * @param {Uint8Array} array Array to read from.
-   * @param {Number} offset Index to start read value.
+   * @param {Number?} offset Index to start read value.
    * @returns {Number}
    */
   readUInt32(array, offset) {
@@ -82,10 +82,11 @@ var WebSocketUtils = {
    * Writes unsigned 16 bit value to two consequent 8-bit array elements.
    * @param {Uint8Array} array Array to write to.
    * @param {Number} value 16 bit unsigned value to write into array.
-   * @param {Number} offset Index to start write value.
+   * @param {Number?} offset Index to start write value.
    * @returns {Number}
    */
   writeUInt16(array, value, offset) {
+    offset = offset || 0;
     array[offset] = (value & 0xff00) >> 8;
     array[offset + 1] = value & 0xff;
   },
@@ -94,10 +95,11 @@ var WebSocketUtils = {
    * Writes unsigned 16 bit value to two consequent 8-bit array elements.
    * @param {Uint8Array} array Array to write to.
    * @param {Number} value 16 bit unsigned value to write into array.
-   * @param {Number} offset Index to start write value.
+   * @param {Number?} offset Index to start write value.
    * @returns {Number}
    */
   writeUInt32(array, value, offset) {
+    offset = offset || 0;
     array[offset] = (value & 0xff000000) >> 24;
     array[offset + 1] = (value & 0xff0000) >> 16;
     array[offset + 2] = (value & 0xff00) >> 8;
