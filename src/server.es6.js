@@ -279,6 +279,18 @@ class WebSocketServer {
         throw new Error('Pong frame is not yet supported!');
       }
 
+      if (state.opCode >= 3 && state.opCode <= 7) {
+        throw new Error(
+          'Reserved for future non-control frames are not supported!'
+        );
+      }
+
+      if (state.opCode > 10) {
+        throw new Error(
+          'Reserved for future control frames are not supported!'
+        );
+      }
+
       return state;
     }).then((state) => {
       var dataLengthPromise;
@@ -360,6 +372,22 @@ class WebSocketServer {
       if (!buffer.isEmpty()) {
         this[privates.onMessageFrame]();
       }
+    }).catch((e) => {
+      var code = 1002;
+      var reason = e.message || e.name || 'Unknown failure on server';
+
+      console.log('Socket is closed: %s (code is %s)', reason, code);
+
+      // 2 bytes for the code and the rest for the reason.
+      var data = new Uint8Array(2 + reason.length);
+      WebSocketUtils.writeUInt16(data, code, 0);
+      data.set(WebSocketUtils.stringToArray(reason), 2);
+
+      var dataFrame = createMessageFrame(
+        OperationCode.CONNECTION_CLOSE, data, true /* isCompleted */
+      );
+      this[privates.tcpSocket].send(dataFrame.buffer, 0, dataFrame.length);
+      this[privates.onTCPSocketClose]();
     });
   }
 
